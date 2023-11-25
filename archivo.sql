@@ -382,9 +382,10 @@ UPDATE Usuarios SET MesaAsignadaID = 5 WHERE UsuarioID IN (13, 14, 15);
 UPDATE Usuarios SET MesaAsignadaID = 6 WHERE UsuarioID IN (16, 17, 18, 19);
 UPDATE Usuarios SET MesaAsignadaID = 7 WHERE UsuarioID IN (20);
 
-*******************************************************
-* ESTEBAN
-1.Calcular Promedio de Valoraciones por Establecimiento
+****************************************************************************************
+***************************************** ESTEBAN ****************************************
+    
+-- 1.Calcular Promedio de Valoraciones por Establecimiento
 
 CREATE FUNCTION CalcularPromedioValoracionesPorEstablecimiento(@EstablecimientoID INT)
 RETURNS DECIMAL(5, 2)
@@ -403,7 +404,7 @@ END;
 DECLARE @EstablecimientoID INT = 1;
 SELECT dbo.CalcularPromedioValoracionesPorEstablecimiento(@EstablecimientoID) AS PromedioValoraciones;
 
-2.Obtener Último Pedido Realizado por un Usuario
+-- 2.Obtener Último Pedido Realizado por un Usuario
 
 CREATE FUNCTION ObtenerUltimoPedidoUsuario(@UsuarioID INT)
 RETURNS TABLE
@@ -420,7 +421,7 @@ DECLARE @UsuarioID INT = 1;
 SELECT * FROM dbo.ObtenerUltimoPedidoUsuario(@UsuarioID);
 
 
-3.Calcular Total de Ventas por Mes para un Establecimiento
+-- 3.Calcular Total de Ventas por Mes para un Establecimiento
 CREATE FUNCTION CalcularTotalVentasPorMes(@EstablecimientoID INT)
 RETURNS TABLE
 AS
@@ -437,3 +438,194 @@ RETURN (
 -- Llamada a la función para calcular el total de ventas por mes para un establecimiento específico
 DECLARE @EstablecimientoID INT = 1;
 SELECT * FROM dbo.CalcularTotalVentasPorMes(@EstablecimientoID);
+
+****************************************************************************************
+***************************************** JAYDE ****************************************
+-- 1
+CREATE FUNCTION ObtenerPromedioPuntuacionPorCategoria(@CategoriaID INT)
+RETURNS DECIMAL(3,2)
+AS
+BEGIN
+    DECLARE @PromedioPuntuacion DECIMAL(3,2)
+    
+    SELECT @PromedioPuntuacion = AVG(v.Puntuacion)
+    FROM Valoraciones v
+    JOIN Productos p ON v.EstablecimientoID = p.EstablecimientoID
+    JOIN Categorias c ON p.CategoriaID = c.CategoriaID
+    WHERE p.CategoriaID = @CategoriaID
+
+    RETURN @PromedioPuntuacion
+END;
+
+-- Supongamos que quieres el promedio de puntuación para la categoría con CategoriaID 1
+DECLARE @PromedioPuntuacionCategoria DECIMAL(3,2)
+SET @PromedioPuntuacionCategoria = dbo.ObtenerPromedioPuntuacionPorCategoria(1)
+SELECT @PromedioPuntuacionCategoria AS PromedioPuntuacionCategoria;
+
+-- 2 // no ha habido gastos pq ningun usurio a concretado la compra
+
+CREATE FUNCTION CalcularTotalGastadoPorUsuario(@UsuarioID INT)
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    DECLARE @TotalGastado DECIMAL(10,2)
+    
+    SELECT @TotalGastado = SUM(DetalleFinanciero)
+    FROM Pedidos
+    WHERE UsuarioID = @UsuarioID
+
+    RETURN @TotalGastado
+END;
+
+-- Supongamos que quieres calcular el total gastado por el usuario con UsuarioID 456
+DECLARE @TotalGastado DECIMAL(10,2)
+SET @TotalGastado = dbo.CalcularTotalGastadoPorUsuario(456)
+SELECT @TotalGastado AS TotalGastado;
+
+-- 3
+
+CREATE FUNCTION ObtenerUltimosPedidosPorUsuario(@UsuarioID INT, @Cantidad INT)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT TOP (@Cantidad) PedidoID, FechaHoraPedido, EstadoPedido, DetalleFinanciero
+    FROM Pedidos
+    WHERE UsuarioID = @UsuarioID
+    ORDER BY FechaHoraPedido DESC
+);
+
+-- Supongamos que quieres los últimos 3 pedidos para el usuario con UsuarioID 456
+SELECT *
+FROM dbo.ObtenerUltimosPedidosPorUsuario(6, 3);
+
+****************************************************************************************
+***************************************** CARLOS ****************************************
+-- 1.EncontrarEstablecimientoMasPopular
+
+CREATE FUNCTION EncontrarEstablecimientoMasPopular()
+RETURNS VARCHAR(255)
+AS
+BEGIN
+    DECLARE @EstablecimientoMasPopular VARCHAR(255);
+
+    SELECT TOP 1 @EstablecimientoMasPopular = E.Nombre
+    FROM Establecimientos E
+    JOIN Pedidos P ON E.EstablecimientoID = P.EstablecimientoID
+    GROUP BY E.Nombre
+    ORDER BY COUNT(P.PedidoID) DESC;
+
+    RETURN @EstablecimientoMasPopular;
+END;
+
+-- Llamada a la función para encontrar el establecimiento más popular
+SELECT dbo.EncontrarEstablecimientoMasPopular() AS EstablecimientoMasPopular;
+
+
+-- 2.Calcular el Total de Pedidos para un Usuario
+
+CREATE FUNCTION CalcularTotalPedidos(@UsuarioID INT)
+RETURNS DECIMAL(10, 2)
+AS
+BEGIN
+    DECLARE @Total DECIMAL(10, 2);
+
+    SELECT @Total = SUM(DetalleFinanciero)
+    FROM Pedidos
+    WHERE UsuarioID = @UsuarioID;
+
+    RETURN ISNULL(@Total, 0);
+END;
+
+--reemplaza el int con el usuario que desees visualizar
+DECLARE @UsuarioID INT = 1;
+SELECT dbo.CalcularTotalPedidos(@UsuarioID) AS TotalPedidos;
+
+-- 3.Obtener Productos más Populares por Categoría
+
+CREATE FUNCTION ObtenerProductosPopularesPorCategoria()
+RETURNS TABLE
+AS
+RETURN (
+    SELECT 
+        NombreCategoria,
+        NombreProducto,
+        CantidadPedidos
+    FROM (
+        SELECT 
+            C.NombreCategoria,
+            P.Nombre AS NombreProducto,
+            COUNT(PE.PedidoID) AS CantidadPedidos,
+            RANK() OVER (PARTITION BY C.NombreCategoria ORDER BY COUNT(PE.PedidoID) DESC) AS Ranking
+        FROM Pedidos PE
+        JOIN Productos P ON PE.EstablecimientoID = P.EstablecimientoID
+        JOIN Categorias C ON P.CategoriaID = C.CategoriaID
+        GROUP BY C.NombreCategoria, P.Nombre
+    ) Ranked
+    WHERE Ranking = 1
+);
+
+-- Llamada a la función para obtener productos más populares por categoría
+SELECT * FROM ObtenerProductosPopularesPorCategoria();
+
+****************************************************************************************
+***************************************** VLADIMIR ****************************************
+-- 1
+CREATE FUNCTION ContarUsuariosPorEstablecimiento(@EstablecimientoID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @CantidadUsuarios INT
+
+    SELECT @CantidadUsuarios = COUNT(DISTINCT UsuarioID)
+    FROM Pedidos
+    WHERE EstablecimientoID = @EstablecimientoID
+
+    RETURN @CantidadUsuarios
+END;
+
+-- Supongamos que quieres contar los usuarios para el establecimiento con EstablecimientoID 12
+DECLARE @CantidadUsuarios INT
+SET @CantidadUsuarios = dbo.ContarUsuariosPorEstablecimiento(12)
+SELECT @CantidadUsuarios AS CantidadUsuarios;
+
+-- 2
+CREATE FUNCTION EncontrarMesaConMasUsuarios()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT TOP 1 MesaAsignadaID AS MesaID, COUNT(UsuarioID) AS CantidadUsuarios
+    FROM Usuarios
+    WHERE MesaAsignadaID IS NOT NULL -- Excluir usuarios sin mesa asignada
+    GROUP BY MesaAsignadaID
+    ORDER BY CantidadUsuarios DESC
+);
+
+
+-- Supongamos que quieres encontrar la mesa con más usuarios
+SELECT *
+FROM dbo.EncontrarMesaConMasUsuarios();
+
+-- 3
+CREATE FUNCTION CalcularPromedioUsuariosPorMesa()
+RETURNS DECIMAL(10, 2)
+AS
+BEGIN
+    DECLARE @PromedioUsuarios DECIMAL(10, 2)
+
+    SELECT @PromedioUsuarios = AVG(CantidadUsuarios)
+    FROM (
+        SELECT COUNT(UsuarioID) AS CantidadUsuarios
+        FROM Usuarios
+        WHERE MesaAsignadaID IS NOT NULL -- Excluir usuarios sin mesa asignada
+        GROUP BY MesaAsignadaID
+    ) AS MesaUsuarios;
+
+    RETURN @PromedioUsuarios;
+END;
+
+-- Supongamos que quieres calcular el promedio de usuarios por mesa
+DECLARE @PromedioUsuariosPorMesa DECIMAL(10, 2)
+SET @PromedioUsuariosPorMesa = dbo.CalcularPromedioUsuariosPorMesa()
+SELECT @PromedioUsuariosPorMesa AS PromedioUsuariosPorMesa;
