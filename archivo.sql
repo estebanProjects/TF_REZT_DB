@@ -629,3 +629,62 @@ END;
 DECLARE @PromedioUsuariosPorMesa DECIMAL(10, 2)
 SET @PromedioUsuariosPorMesa = dbo.CalcularPromedioUsuariosPorMesa()
 SELECT @PromedioUsuariosPorMesa AS PromedioUsuariosPorMesa;
+
+******************************************************************************************
+***************************************** JEFFREY ****************************************
+
+-- 1 mesas sin usuarios
+
+SELECT MesaID
+FROM Mesas
+WHERE MesaID NOT IN (SELECT DISTINCT MesaAsignadaID FROM Usuarios WHERE MesaAsignadaID IS NOT NULL);
+
+-- 2.CalcularPromedioPedidosPorMes
+
+CREATE FUNCTION CalcularPromedioPedidosPorMes()
+RETURNS DECIMAL(10, 2)
+AS
+BEGIN
+    DECLARE @PromedioPedidos DECIMAL(10, 2)
+
+    SELECT @PromedioPedidos = AVG(CantidadPedidos)
+    FROM (
+        SELECT COUNT(PedidoID) AS CantidadPedidos
+        FROM Pedidos
+        WHERE MONTH(FechaHoraPedido) = MONTH(GETDATE()) AND YEAR(FechaHoraPedido) = YEAR(GETDATE())
+        GROUP BY YEAR(FechaHoraPedido), MONTH(FechaHoraPedido)
+    ) AS PedidosPorMes;
+
+    RETURN @PromedioPedidos;
+END;
+
+-- Supongamos que quieres calcular el promedio de pedidos para el mes actual
+DECLARE @PromedioPedidosPorMes DECIMAL(10, 2)
+SET @PromedioPedidosPorMes = dbo.CalcularPromedioPedidosPorMes()
+SELECT @PromedioPedidosPorMes AS PromedioPedidosPorMes;
+
+-- 3.cuántos usuarios tienen el rol de "Dueño"
+
+SELECT COUNT(UsuarioID) AS CantidadDueños
+FROM Usuarios
+WHERE RolID = 2; -- Suponiendo que el ID del rol de "Dueño" es 2
+
+-- 4 promedio de descuento por establecimiento
+
+SELECT AVG(Descuento) AS PromedioDescuento
+FROM Promociones;
+
+-- 5. el establecimiento con el descuento más alto
+
+SELECT TOP 1 e.Nombre AS Establecimiento, p.Descuento
+FROM Establecimientos e
+JOIN Promociones p ON e.EstablecimientoID = p.EstablecimientoID
+ORDER BY p.Descuento DESC;
+
+-- 6.el establecimiento con más mesas
+
+SELECT TOP 1 e.Nombre AS Establecimiento, COUNT(m.MesaID) AS CantidadMesas
+FROM Establecimientos e
+JOIN Mesas m ON e.EstablecimientoID = m.EstablecimientoID
+GROUP BY e.Nombre
+ORDER BY CantidadMesas DESC;
